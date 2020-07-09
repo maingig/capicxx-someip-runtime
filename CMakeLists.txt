@@ -65,6 +65,17 @@ endif()
 include_directories( ${Boost_INCLUDE_DIR} )
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_CRT_SECURE_NO_WARNINGS /wd4503")
 link_directories(${Boost_LIBRARY_DIR})
+elseif(ANDROID)
+    if (${ANDROID_ABI} STREQUAL "x86_64")
+        include_directories(${ANDROID_SYSROOT}/usr/include/x86_64-linux-android)
+    elseif (${ANDROID_ABI} STREQUAL "x86")
+        include_directories(${ANDROID_SYSROOT}/usr/include/i686-linux-android)
+    elseif (${ANDROID_ABI} STREQUAL "arm64-v8a")
+        include_directories(${ANDROID_SYSROOT}/usr/include/aarch64-linux-android)
+    elseif (${ANDROID_ABI} STREQUAL "armeabi-v7a")
+        include_directories(${ANDROID_SYSROOT}/usr/include/arm-linux-androideabi)
+    endif()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wformat -Wformat-security -Wconversion -Wno-ignored-attributes -fPIC -fPIE -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK")
 else()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK -pthread")
 endif()
@@ -90,7 +101,7 @@ endmacro ()
 # Offer the user the choice of overriding the installation directories
 set (INSTALL_LIB_DIR lib CACHE PATH "Installation directory for libraries")
 set (INSTALL_BIN_DIR bin CACHE PATH "Installation directory for executables")
-set (INSTALL_INCLUDE_DIR include/CommonAPI-${COMMONAPI_API_HEADER_VERSION} CACHE PATH "Installation directory for header files")
+set (INSTALL_INCLUDE_DIR include CACHE PATH "Installation directory for header files")
 
 if (WIN32 AND NOT CYGWIN)
     set (DEF_INSTALL_CMAKE_DIR cmake)
@@ -113,7 +124,8 @@ endforeach ()
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
     FIND_PACKAGE(CommonAPI 3.1.12 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(CommonAPI 3.1.12 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(capicxx-core-runtime 3.1.12 REQUIRED)
+    set (COMMONAPI_INCLUDE_DIRS ${capicxx-core-runtime_INCLUDE_DIRS})
 endif()
 
 message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
@@ -122,16 +134,15 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 
 # Boost
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
-include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip3 3.1.7 REQUIRED)
-message(STATUS "vsomeip3 version: ${vsomeip3_VERSION}")
+find_package( vsomeip 3.1.7 REQUIRED)
+message(STATUS "vsomeip version: ${vsomeip_VERSION}")
 
 include_directories (
     include
     ${Boost_INCLUDE_DIR}
     ${COMMONAPI_INCLUDE_DIRS}
-    ${VSOMEIP3_INCLUDE_DIRS}
+    ${vsomeip_INCLUDE_DIRS}
 )
 
 file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
@@ -140,7 +151,13 @@ list (SORT CommonAPI-SomeIP_SRC)
 # CommonAPI
 add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
-target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip3)
+
+if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
+    target_link_libraries (CommonAPI-SomeIP CommonAPI)
+else()
+    target_link_libraries(CommonAPI-SomeIP capicxx-core-runtime::capicxx-core-runtime)
+endif()
+target_link_libraries(CommonAPI-SomeIP vsomeip::vsomeip)
 
 if (MSVC)
     target_link_libraries(CommonAPI-SomeIP ws2_32 Rpcrt4)
