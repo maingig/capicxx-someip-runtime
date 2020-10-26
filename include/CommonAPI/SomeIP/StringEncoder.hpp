@@ -17,6 +17,8 @@
 #if _WIN32
     #define LITTLE_ENDIAN 1234
     #define BIG_ENDIAN 4321
+#elif defined(__QNX__)
+    #include <sys/param.h>
 #endif
 
 namespace CommonAPI {

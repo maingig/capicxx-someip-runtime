@@ -59,8 +59,9 @@ class Watch : public CommonAPI::Watch {
     void processQueueEntry(std::shared_ptr<QueueEntry> _queueEntry);
 
 private:
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__QNX__)
     int pipeFileDescriptors_[2];
+    const int pipeValue_;
 #else
     int eventFd_;
 #endif
@@ -76,8 +77,7 @@ private:
 
 #ifdef _WIN32
     HANDLE wsaEvent_;
-    const int pipeValue_;
-#else
+#elif !defined(__QNX__)
     const std::uint64_t eventFdValue_;
 
 #endif

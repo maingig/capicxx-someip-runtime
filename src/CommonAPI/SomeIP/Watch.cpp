@@ -13,7 +13,14 @@
 #include <ws2tcpip.h>
 #else
 #include <unistd.h>
+#if !defined(__QNX__)
 #include <sys/eventfd.h>
+#else
+#include <cstdio>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#endif
 
 #ifndef EFD_SEMAPHORE
 #define EFD_SEMAPHORE 1
@@ -26,7 +33,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 Watch::Watch(const std::shared_ptr<Connection>& _connection) :
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__QNX__)
         pipeValue_(4)
 #else
         eventFd_(0),
@@ -157,6 +164,103 @@ Watch::Watch(const std::shared_ptr<Connection>& _connection) :
         WSACleanup();
     }
     pollFileDescriptor_.fd = pipeFileDescriptors_[0];
+#elif defined(__QNX__)
+    struct addrinfo hints;
+    struct addrinfo *result;
+    int error;
+    int listenSocket;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    //hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags = AI_PASSIVE;
+
+    error = getaddrinfo(NULL, "0", &hints, &result);
+    if (error) {
+        std::perror(gai_strerror(error));
+    }
+    // Create a SOCKET for connecting to server
+    listenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if (listenSocket < 0) {
+        std::strerror(errno);
+        freeaddrinfo(result);
+    }
+
+    // Setup the TCP listening socket
+    error = bind(listenSocket, result->ai_addr, (int)result->ai_addrlen);
+    if (error < 0) {
+        std::strerror(errno);
+        freeaddrinfo(result);
+        close(listenSocket);
+   }
+
+    sockaddr* connected_addr = new sockaddr();
+    uint16_t port = 0;
+    socklen_t namelength = sizeof(sockaddr);
+    error = getsockname(listenSocket, connected_addr, &namelength);
+    if (error < 0) {
+        std::strerror(errno);
+    } else if (connected_addr->sa_family == AF_INET) {
+        port = ((struct sockaddr_in*)connected_addr)->sin_port;
+    }
+    delete connected_addr;
+
+    freeaddrinfo(result);
+
+    error = listen(listenSocket, SOMAXCONN);
+    if (error < 0) {
+        std::strerror(errno);
+        close(listenSocket);
+    }
+
+    pipeFileDescriptors_[0] = -1;
+    struct addrinfo *ptr = nullptr;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    //hints.ai_protocol = IPPROTO_TCP;
+
+    // Resolve the server address and port
+    error = getaddrinfo("127.0.0.1", std::to_string(ntohs(port)).c_str(), &hints, &result);
+    if (error != 0) {
+        std::strerror(errno);
+    }
+
+    // Attempt to connect to an address until one succeeds
+    for (ptr = result; ptr != nullptr; ptr = ptr->ai_next) {
+
+        // Create a SOCKET for connecting to server
+        pipeFileDescriptors_[0] = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        if (pipeFileDescriptors_[0] == -1) {
+            std::strerror(errno);
+        }
+
+        // Connect to server.
+        error = connect(pipeFileDescriptors_[0], ptr->ai_addr, (int)ptr->ai_addrlen);
+        if (error < 0) {
+            std::strerror(errno);
+            close(pipeFileDescriptors_[0]);
+            pipeFileDescriptors_[0] = -1;
+            continue;
+        }
+        break;
+    }
+
+    freeaddrinfo(result);
+
+    if (pipeFileDescriptors_[0] == -1) {
+        std::perror("Unable to connect to server!");
+    }
+
+    // Accept a client socket
+    pipeFileDescriptors_[1] = accept(listenSocket, NULL, NULL);
+    if (pipeFileDescriptors_[1] == -1) {
+        std::strerror(errno);
+        close(listenSocket);
+    }
+    pollFileDescriptor_.fd = pipeFileDescriptors_[0];
 #else
     eventFd_ = eventfd(0, EFD_NONBLOCK | EFD_SEMAPHORE);
     if (eventFd_ == -1) {
@@ -182,6 +286,16 @@ Watch::~Watch() {
     // cleanup
     closesocket(pipeFileDescriptors_[0]);
     WSACleanup();
+#elif __QNX__
+    // shutdown the connection since no more data will be sent
+    int iResult = shutdown(pipeFileDescriptors_[0], SHUT_WR);
+    if (iResult == -1) {
+        std::strerror(errno);
+        close(pipeFileDescriptors_[0]);
+    }
+
+    // cleanup
+    close(pipeFileDescriptors_[0]);
 #else
     close(eventFd_);
 #endif
@@ -240,6 +354,14 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
             printf("send failed with error: %d\n", error);
         }
     }
+#elif __QNX__
+    // Send an initial buffer
+    const char *sendbuf = "1";
+
+    ssize_t iResult = send(pipeFileDescriptors_[1], sendbuf, (int)strlen(sendbuf), 0);
+    if (iResult == -1) {
+        std::strerror(errno);
+    }
 #else
     while (write(eventFd_, &eventFdValue_, sizeof(eventFdValue_)) == -1) {
         if (errno != EAGAIN && errno != EINTR) {
@@ -267,6 +389,19 @@ void Watch::popQueue() {
     }
     else {
         printf("recv failed with error: %d\n", WSAGetLastError());
+    }
+#elif __QNX__
+    // Receive until the peer closes the connection
+    ssize_t iResult;
+    char recvbuf[1];
+    int recvbuflen = 1;
+
+    iResult = recv(pipeFileDescriptors_[0], recvbuf, recvbuflen, 0);
+    if (iResult > 0) {
+        //printf("Bytes received from %d: %d\n", wakeFd_.fd, iResult);
+    }
+    else if (iResult < 0) {
+        std::strerror(errno);
     }
 #else
     std::uint64_t readValue(0);
