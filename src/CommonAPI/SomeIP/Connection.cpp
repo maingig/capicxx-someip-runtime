@@ -362,6 +362,7 @@ Connection::Connection(const std::string &_name)
         cleanupCancelled_(false),
         activeConnections_(0),
         lastSessionId_(0) {
+#ifndef __QNX__ 
     std::string appId = Runtime::getProperty("LogApplication");
     std::string contextId = Runtime::getProperty("LogContext");
 
@@ -370,6 +371,7 @@ Connection::Connection(const std::string &_name)
 
     if (contextId != "")
         vsomeip::runtime::set_property("LogContext", contextId);
+#endif
 }
 
 Connection::~Connection() {
