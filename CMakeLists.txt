@@ -1,4 +1,4 @@
-# Copyright (C) 2013-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+# Copyright (C) 2013-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -10,8 +10,8 @@ project (CommonAPI-SomeIP)
 set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
-set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 1)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 12)
+set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 2)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 0)
 
 set (LIBRARY_TYPE "STATIC")
 if (BUILD_SHARED_LIBS)
@@ -52,9 +52,9 @@ if(NOT CMAKE_BUILD_TYPE)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-if (MSVC) 
+if (MSVC)
 # Boost
-find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
+find_package( Boost 1.55 COMPONENTS system thread log REQUIRED )
 if(Boost_FOUND)
   if(Boost_LIBRARY_DIR)
     MESSAGE( STATUS "Boost_LIBRARY_DIR not empty using it: ${Boost_LIBRARY_DIR}" )
@@ -87,16 +87,21 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wextra -Wformat -Wformat-sec
     add_definitions(-D__QNXNTO__)
     add_definitions(-D_QNX_SOURCE)
 else()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK -pthread -fvisibility=hidden")
 endif()
 
 SET(MAX_LOG_LEVEL "DEBUG" CACHE STRING "maximum log level")
 message(STATUS "MAX_LOG_LEVEL is set to value: ${MAX_LOG_LEVEL}")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_INTERNAL_COMPILATION")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_SOMEIP_VERSION_MAJOR=${LIBCOMMONAPI_SOMEIP_MAJOR_VERSION}") 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_SOMEIP_VERSION_MINOR=${LIBCOMMONAPI_SOMEIP_MINOR_VERSION}") 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_SOMEIP_VERSION_MAJOR=${LIBCOMMONAPI_SOMEIP_MAJOR_VERSION}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_SOMEIP_VERSION_MINOR=${LIBCOMMONAPI_SOMEIP_MINOR_VERSION}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_LOGLEVEL=COMMONAPI_LOGLEVEL_${MAX_LOG_LEVEL}")
+
+if (ENABLE_ADDRESS_ALIASES)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMMONAPI_ENABLE_ADDRESS_ALIASES")
+message(STATUS "Enabled address aliasing.")
+endif ()
 
 # Package config module not found message macro
 macro (pkg_config_module_not_found_message PKG_CONFIG_MODULE)
@@ -132,9 +137,9 @@ endforeach ()
 ###################################################################################################
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
-    FIND_PACKAGE(CommonAPI 3.1.12 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
+    FIND_PACKAGE(CommonAPI 3.2.0 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(capicxx-core-runtime 3.1.12 REQUIRED)
+    FIND_PACKAGE(capicxx-core-runtime 3.2.0 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
     set (COMMONAPI_INCLUDE_DIRS ${capicxx-core-runtime_INCLUDE_DIRS})
 endif()
 
@@ -142,17 +147,14 @@ message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
 message(STATUS "COMMONAPI_INCLUDE_DIRS: ${COMMONAPI_INCLUDE_DIRS}")
 message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 
-# Boost
-find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
-
-find_package( vsomeip 3.1.7 REQUIRED)
-message(STATUS "vsomeip version: ${vsomeip_VERSION}")
+find_package (vsomeip3 3.1.0 REQUIRED)
+message(STATUS "Using vsomeip3 - v${vsomeip3_VERSION}")
 
 include_directories (
     include
     ${Boost_INCLUDE_DIR}
     ${COMMONAPI_INCLUDE_DIRS}
-    ${vsomeip_INCLUDE_DIRS}
+    ${VSOMEIP3_INCLUDE_DIRS}
 )
 
 file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
@@ -161,6 +163,7 @@ list (SORT CommonAPI-SomeIP_SRC)
 # CommonAPI
 add_library (CommonAPI-SomeIP ${LIBRARY_TYPE} ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
+target_link_libraries (CommonAPI-SomeIP capicxx-core-runtime ${VSOMEIP_LIBRARIES})
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
     target_link_libraries (CommonAPI-SomeIP CommonAPI)

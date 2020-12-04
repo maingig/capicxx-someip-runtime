@@ -1,55 +1,29 @@
+capi_someip_srcs = [
+    "src/CommonAPI/SomeIP/**/*.cpp"
+]
+
 cc_library_shared {
     name: "libCommonAPI-SomeIP",
-    vendor_available: true,
-    rtti: true,
-    cpp_std: "gnu++11",
-
+    vendor: true,
+    srcs: capi_someip_srcs,
+    defaults: [
+        "capi_defaults"
+    ],
     cppflags: [
-        "-fexceptions",
-        "-Wall",
-        "-Werror",
-        "-Wextra",
-        "-Wformat",
-        "-Wformat-security",
-        "-Wconversion",
-        "-fstrict-aliasing",
-        "-fstack-protector",
-        "-fasynchronous-unwind-tables",
-        "-fno-omit-frame-pointer",
-        "-DCOMMONAPI_INTERNAL_COMPILATION",
         "-D_GLIBCXX_USE_NANOSLEEP",
-        "-Wno-ignored-attributes",
-        "-Wno-unused-parameter",
-        "-Wno-unused-private-field",
+        "-DBOOST_LOG_DYN_LINK",
+        "-pthread",
+	"-Wno-unused-private-field"
     ],
-
-    ldflags: ["-Wl,-export-dynamic"],
-
-    srcs: [
-        "src/**/*.cpp",
-    ],
-
     local_include_dirs: [
-        "include",
-    ],
-
-    shared_libs: [
-        "libCommonAPI",
-        "libvsomeip",
-        "libvsomeip_cfg",
-        "libvsomeip_e2e",
-        "libvsomeip_sd",
-    ],
-
-    export_include_dirs: [
         "include"
     ],
-
-    export_shared_lib_headers: [
-        "libCommonAPI",
-        "libvsomeip",
-        "libvsomeip_cfg",
-        "libvsomeip_e2e",
-        "libvsomeip_sd",
+    export_include_dirs: [
+	"include"
     ],
+    shared_libs: [
+	"libCommonAPI",
+	"libvsomeip"
+    ],
+    rtti: true
 }
