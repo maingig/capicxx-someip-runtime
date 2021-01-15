@@ -139,7 +139,7 @@ endforeach ()
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
     FIND_PACKAGE(CommonAPI 3.2.0 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(capicxx-core-runtime 3.2.0 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(capicxx-core-runtime 3.2.0 REQUIRED)
     set (COMMONAPI_INCLUDE_DIRS ${capicxx-core-runtime_INCLUDE_DIRS})
 endif()
 
@@ -147,14 +147,14 @@ message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
 message(STATUS "COMMONAPI_INCLUDE_DIRS: ${COMMONAPI_INCLUDE_DIRS}")
 message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 
-find_package (vsomeip3 3.1.0 REQUIRED)
-message(STATUS "Using vsomeip3 - v${vsomeip3_VERSION}")
+find_package (vsomeip 3.1.20 REQUIRED)
+message(STATUS "Using vsomeip - v${vsomeip_VERSION}")
 
 include_directories (
     include
     ${Boost_INCLUDE_DIR}
     ${COMMONAPI_INCLUDE_DIRS}
-    ${VSOMEIP3_INCLUDE_DIRS}
+    ${vsomeip_INCLUDE_DIRS}
 )
 
 file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
@@ -163,7 +163,6 @@ list (SORT CommonAPI-SomeIP_SRC)
 # CommonAPI
 add_library (CommonAPI-SomeIP ${LIBRARY_TYPE} ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
-target_link_libraries (CommonAPI-SomeIP capicxx-core-runtime ${VSOMEIP_LIBRARIES})
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
     target_link_libraries (CommonAPI-SomeIP CommonAPI)
